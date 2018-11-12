@@ -2,14 +2,19 @@
 
 open System
 open FSharp.Data
-open System.Globalization
+open System.Linq
 open Microsoft.ML
+open Microsoft.ML.Data
 open Microsoft.ML.Core.Data
 open Microsoft.ML.Runtime.Api
 open Microsoft.ML.Runtime.Data
 open Microsoft.ML.Transforms.Text
 open Microsoft.ML.Trainers
 open Microsoft.ML.Transforms
+open Microsoft.ML.Runtime
+open Microsoft.ML.Legacy.Transforms
+open Microsoft.ML.Transforms.Categorical
+open Microsoft.ML.StaticPipe
 
 
 //type Normalized = CsvProvider<"normalized.csv",",">
@@ -32,16 +37,30 @@ let main argv =
                                           TextLoader.Column("NumericalFeatures", Nullable(DataKind.R4), 11, 17)
                                         |]
                         ))
+    // Read the data.
+    let data = _textLoader.Read("../../../normalized.csv")
+    // Inspect the first 10 records of the categorical columns to check that they are correctly read.
+    let catColumns = data.GetColumn<string[]>(mlContext, "CategoricalFeatures").Take(10).ToArray();
 
-    let data = _textLoader.Read("normalized.csv")
+    // Build several alternative featurization pipelines.
+    let dynamicPipeline =
+        // Convert each categorical feature into one-hot encoding independently.
+        mlContext.Transforms.Categorical.OneHotEncoding("CategoricalFeatures", "CategoricalOneHot")
+        :> IEstimator<CategoricalTransform>
+        :?> IEstimator<ITransformer>
+    // Convert all categorical features into indices, and build a 'word bag' of these.
+    dynamicPipeline.Append(mlContext.Transforms.Categorical.OneHotEncoding("CategoricalFeatures",
+        "CategoricalBag", CategoricalTransform.OutputKind.Bag))
+
+
     let classification = new BinaryClassificationContext(mlContext)
 
-    let est = ColumnConcatenatingEstimator(mlContext, "Features", "CategoricalFeatures", "NumericalFeatures")
+
+    dynamicPipeline.Append(mlContext.Transforms.Concatenate("Features", [| "NumericalFeatures"; "CategoricalBag" |]))
     let struct(train, test) = classification.TrainTestSplit(data, testFraction = 0.2)
-    
-    est.Append(LinearClassificationTrainer(mlContext, "Features", "Label"))
-        
-    let model = est.Fit(train)
+    let trainer = FastTree.FastTreeBinaryClassificationTrainer(mlContext, "Label", "Features")
+    dynamicPipeline.Append(trainer)
+    let model = dynamicPipeline.Fit(train)
     let predictions = model.Transform(test);
     let evaluationResult = classification.Evaluate(predictions, "Label")
     //classification.CrossValidate(train, est)
