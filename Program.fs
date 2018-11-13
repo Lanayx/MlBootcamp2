@@ -52,17 +52,14 @@ let main argv =
     dynamicPipeline.Append(mlContext.Transforms.Categorical.OneHotEncoding("CategoricalFeatures",
         "CategoricalBag", CategoricalTransform.OutputKind.Bag))
 
+    dynamicPipeline
+        .Append(mlContext.Transforms.Concatenate("Features", "NumericalFeatures"; "CategoricalBag" ))
+        .Append(mlContext.BinaryClassification.Trainers.FastTree(numTrees= 50))
 
-    let classification = new BinaryClassificationContext(mlContext)
-
-
-    dynamicPipeline.Append(mlContext.Transforms.Concatenate("Features", [| "NumericalFeatures"; "CategoricalBag" |]))
-    let struct(train, test) = classification.TrainTestSplit(data, testFraction = 0.2)
-    let trainer = FastTree.FastTreeBinaryClassificationTrainer(mlContext, "Label", "Features")
-    dynamicPipeline.Append(trainer)
+    let struct(train, test) = mlContext.BinaryClassification.TrainTestSplit(data, testFraction = 0.2)
     let model = dynamicPipeline.Fit(train)
-    let predictions = model.Transform(test);
-    let evaluationResult = classification.Evaluate(predictions, "Label")
+    let predictions = model.Transform(test)
+    let evaluationResult = mlContext.BinaryClassification.Evaluate(predictions, "Label")
     //classification.CrossValidate(train, est)
 
     printfn "Hello World from F#!"
