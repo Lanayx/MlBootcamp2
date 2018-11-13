@@ -10,6 +10,11 @@ using System.Text;
 
 namespace ConsoleApp15
 {
+
+    class Input { }
+    class Output { }
+
+
     class Program
     {
 
@@ -46,17 +51,22 @@ namespace ConsoleApp15
             // Of course, if we want to train the model, we will need to compose a single float vector of all the features.
             // Here's how we could do this:
 
+            var trainer = mlContext.BinaryClassification.Trainers.FastTree(numTrees: 50);
+
             var fullLearningPipeline = dynamicPipeline
                 // Concatenate two of the 3 categorical pipelines, and the numeric features.
                 .Append(mlContext.Transforms.Concatenate("Features", "NumericalFeatures", "CategoricalBag"))
                 // Now we're ready to train. We chose our FastTree trainer for this classification task.
-                .Append(mlContext.BinaryClassification.Trainers.FastTree(numTrees: 50));
+                .Append(trainer);
 
             // Train the model.
             var (train, test) = mlContext.BinaryClassification.TrainTestSplit(data, testFraction: 0.2);
             var model = fullLearningPipeline.Fit(train);
             var predictions = model.Transform(test);
             var evaluationResult = mlContext.BinaryClassification.Evaluate(predictions, "Label");
+            Console.WriteLine("Auc = {0}, Trainer = {1}",evaluationResult.Auc, train.GetType().Name);
+
+            var predictionFunction = model.MakePredictionFunction<Input, Output>(mlContext);
         }
 
 
