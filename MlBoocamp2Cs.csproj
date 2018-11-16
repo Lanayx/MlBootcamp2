@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <None Remove=".gitignore" />
+    <None Remove="normalized - Copy.csv" />
     <None Remove="normalized.csv" />
     <None Remove="Program.fs" />
   </ItemGroup>
