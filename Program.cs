@@ -8,12 +8,30 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Microsoft.ML.Runtime.Api;
 
 namespace ConsoleApp15
 {
 
-    class Input { }
-    class Output { }
+    public class Input
+    {
+        [Column(ordinal: "0", name: "Label")]
+        public float Label;
+        [Column(ordinal: "1")]
+        public string CategoricalFeatures;
+    }
+
+    public class Output
+    {
+        [ColumnName("PredictedLabel")]
+        public bool Prediction { get; set; }
+
+        [ColumnName("Probability")]
+        public float Probability { get; set; }
+
+        [ColumnName("Score")]
+        public float Score { get; set; }
+    }
 
 
     class Program
@@ -24,22 +42,21 @@ namespace ConsoleApp15
 
             var mlContext = new MLContext();
             var reader = mlContext.Data.TextReader(new TextLoader.Arguments
-                                {
+            {
 
-                                    Separator = ",",
-                                    HasHeader = true,
-                                    Column = new[]
-                                    {
-                                                  new TextLoader.Column("Label", DataKind.BL, 0),
-                                                  new TextLoader.Column("CategoricalFeatures", DataKind.TX, 1)
-                                    }
-                                });
+                Separator = ",",
+                HasHeader = true,
+                Column = new[]
+                {
+                        new TextLoader.Column("Label", DataKind.BL, 0),
+                        new TextLoader.Column("CategoricalFeatures", DataKind.TX, 1, 10),
+                        new TextLoader.Column("NumericalFeatures", DataKind.R4, 11, 17)
+                }
+            }
+                                );
 
             // Read the data.
-            var data = reader.Read("../../../normalized.csv");
-
-            //// Inspect the first 10 records of the categorical columns to check that they are correctly read.
-            //var catColumns = data.GetColumn<string[]>(mlContext, "CategoricalFeatures").Take(10).ToArray();
+            var data = reader.Read("../../../normalized.csv");  
 
             // Build several alternative featurization pipelines.
             var dynamicPipeline =
@@ -63,10 +80,6 @@ namespace ConsoleApp15
             var predictions = model.Transform(test);
             var evaluationResult = mlContext.BinaryClassification.Evaluate(predictions, "Label");
             Console.WriteLine("Auc = {0}, Trainer = {1}",evaluationResult.Auc, train.GetType().Name);
-
-            var predictionFunction = model.MakePredictionFunction<Input, Output>(mlContext);
         }
-
-
     }
 }

@@ -17,9 +17,25 @@ open Microsoft.ML.Transforms.Categorical
 open Microsoft.ML.StaticPipe
 
 
-//type Normalized = CsvProvider<"normalized.csv",",">
+    type Input =   
+    
+        [<Column(ordinal= "0", name="Label")>]
+        val mutable Label: single
+        [<Column(ordinal= "1")>]
+        val mutable CategoricalFeatures: string
+    
 
-//let userData = new Normalized()
+    type Output =
+    
+        [<ColumnName("PredictedLabel")>]
+        val mutable Prediction: bool
+
+        [<ColumnName("Probability")>]
+        val mutable Probability: single
+
+        [<ColumnName("Score")>]
+        val mutable Score: single
+    
 
 [<EntryPoint>]
 let main argv =
@@ -48,19 +64,20 @@ let main argv =
         mlContext.Transforms.Categorical.OneHotEncoding("CategoricalFeatures", "CategoricalOneHot")
         :> IEstimator<CategoricalTransform>
         :?> IEstimator<ITransformer>
-    // Convert all categorical features into indices, and build a 'word bag' of these.
-    dynamicPipeline.Append(mlContext.Transforms.Categorical.OneHotEncoding("CategoricalFeatures",
-        "CategoricalBag", CategoricalTransform.OutputKind.Bag))
+    
+    let trainer = mlContext.BinaryClassification.Trainers.FastTree("Label", "CategoricalOneHot", numTrees= 20)
 
-    dynamicPipeline
-        .Append(mlContext.Transforms.Concatenate("Features", "NumericalFeatures"; "CategoricalBag" ))
-        .Append(mlContext.BinaryClassification.Trainers.FastTree(numTrees= 50))
+    let fullLearningPipeline = 
+        dynamicPipeline
+            // Concatenate two of the 3 categorical pipelines, and the numeric features.
+            .Append(mlContext.Transforms.Concatenate("Features", "CategoricalOneHot"))
+            // Now we're ready to train. We chose our FastTree trainer for this classification task.
+            .Append(trainer)
 
-    let struct(train, test) = mlContext.BinaryClassification.TrainTestSplit(data, testFraction = 0.2)
-    let model = dynamicPipeline.Fit(train)
+    // Train the model.
+    let struct(train, test) = mlContext.BinaryClassification.TrainTestSplit(data, testFraction= 0.5)
+    let model = fullLearningPipeline.Fit(train)
     let predictions = model.Transform(test)
     let evaluationResult = mlContext.BinaryClassification.Evaluate(predictions, "Label")
-    //classification.CrossValidate(train, est)
-
-    printfn "Hello World from F#!"
-    0 // return an integer exit code
+    Console.WriteLine("Auc = {0}, Trainer = {1}", evaluationResult.Auc, train.GetType().Name)
+    0
